@@ -1,0 +1,290 @@
+% .satyh files are loaded by the PDF backend.
+% .satyh-markdown and .saty-html files are loaded by the text backend for markdoown and html outputs, respectively.
+% A .satyg file is loaded when the corresponding .satyh or .satyh-* files are not loaded.
+% See https://qiita.com/puripuri2100/items/ca0b054d38480f1bda61 for more details about the load order.
+
+% load standard list package
+@require: list
+@require: gr
+
+
+module Tombo : sig
+  % Type declaration of module Tombo
+
+  val default-bleed-size : length
+  val default-tombo-space-size : length
+
+  val tombo-page-break : length option?-> length option?-> context -> page -> ((|page-number : int|) -> (| text-height: length; text-origin: point |)) -> ((|page-number : int|) -> (|header-content : block-boxes; header-origin: point; footer-content: block-boxes; footer-origin: point|)) -> block-boxes -> document
+
+end = struct
+
+  let default-bleed-size = 3mm
+  let default-tombo-space-size = 30mm
+
+
+  let get-page-size page =
+    match page with
+    | A0Paper -> (841mm, 1189mm)
+    | A1Paper -> (594mm, 841mm)
+    | A2Paper -> (420mm, 594mm)
+    | A3Paper -> (297mm, 420mm)
+    | A4Paper -> (210mm, 297mm)
+    | A5Paper -> (148mm, 210mm)
+    | USLetter -> (8.5inch, 11inch)
+    | USLegal -> (26inch, 37inch)
+    | UserDefinedPaper (w, h) -> (w, h)
+
+  % マジックナンバー
+  let line-len = 10mm
+  let line-depth = 0.5pt
+
+  let make-tombo-gr-lst tombo-space-size bleed-size (old-page-w, old-page-h) =
+    % ----- 左上角のトンボ
+    let left-top-path-lst =
+      [
+        Gr.poly-line (tombo-space-size -' line-len, old-page-h +' bleed-size *' 2.0 +' tombo-space-size)
+          [
+            (tombo-space-size +' bleed-size, old-page-h +' bleed-size *' 2.0 +' tombo-space-size);
+            (tombo-space-size +' bleed-size, old-page-h +' bleed-size *' 2.0 +' tombo-space-size +' line-len);
+          ];
+        Gr.poly-line (tombo-space-size -' line-len, old-page-h +' bleed-size +' tombo-space-size)
+          [
+            (tombo-space-size, old-page-h +' bleed-size +' tombo-space-size);
+            (tombo-space-size, old-page-h +' bleed-size *' 2.0 +' tombo-space-size +' line-len);
+          ];
+      ]
+    in
+    % ----- 左下角のトンボ
+    let left-bottom-path-lst =
+      [
+        Gr.poly-line (tombo-space-size -' line-len, tombo-space-size)
+          [
+            (tombo-space-size +' bleed-size, tombo-space-size);
+            (tombo-space-size +' bleed-size, tombo-space-size -' line-len);
+          ];
+        Gr.poly-line (tombo-space-size -' line-len, bleed-size +' tombo-space-size)
+          [
+            (tombo-space-size, bleed-size +' tombo-space-size);
+            (tombo-space-size, tombo-space-size -' line-len);
+          ];
+      ]
+    in
+    % ----- 右上角のトンボ
+    let right-top-path-lst =
+      [
+        Gr.poly-line (
+          tombo-space-size +' bleed-size *' 2.0 +' old-page-w +' line-len,
+          old-page-h +' bleed-size *' 2.0 +' tombo-space-size
+        )
+          [
+            (tombo-space-size +' bleed-size +' old-page-w, old-page-h +' bleed-size *' 2.0 +' tombo-space-size);
+            (tombo-space-size +' bleed-size +' old-page-w, old-page-h +' bleed-size *' 2.0 +' tombo-space-size +' line-len);
+          ];
+        Gr.poly-line (
+          tombo-space-size +' bleed-size *' 2.0 +' old-page-w +' line-len,
+          old-page-h +' bleed-size +' tombo-space-size
+        )
+          [
+            (tombo-space-size +' bleed-size *' 2.0 +' old-page-w, old-page-h +' bleed-size +' tombo-space-size);
+            (tombo-space-size +' bleed-size *' 2.0 +' old-page-w, old-page-h +' bleed-size *' 2.0 +' tombo-space-size +' line-len);
+          ];
+      ]
+    in
+    % ----- 右下角のトンボ
+    let right-bottom-path-lst =
+      [
+        Gr.poly-line (
+          tombo-space-size +' bleed-size *' 2.0 +' old-page-w +' line-len,
+          tombo-space-size
+        )
+          [
+            (tombo-space-size +' bleed-size +' old-page-w, tombo-space-size);
+            (tombo-space-size +' bleed-size +' old-page-w, tombo-space-size -' line-len);
+          ];
+        Gr.poly-line (
+          tombo-space-size +' bleed-size *' 2.0 +' old-page-w +' line-len,
+          bleed-size +' tombo-space-size
+        )
+          [
+            (tombo-space-size +' bleed-size *' 2.0 +' old-page-w, bleed-size +' tombo-space-size);
+            (tombo-space-size +' bleed-size *' 2.0 +' old-page-w, tombo-space-size -' line-len);
+          ];
+      ]
+    in
+    let top-path-lst =
+      [
+        Gr.line
+          (
+            tombo-space-size +' bleed-size +' old-page-w *' 0.5 -' line-len,
+            tombo-space-size +' bleed-size *' 2.0 +' old-page-h
+          )
+          (
+            tombo-space-size +' bleed-size +' old-page-w *' 0.5 +' line-len,
+            tombo-space-size +' bleed-size *' 2.0 +' old-page-h
+          );
+        Gr.line
+          (
+            tombo-space-size +' bleed-size +' old-page-w *' 0.5,
+            tombo-space-size +' bleed-size *' 2.0 +' old-page-h
+          )
+          (
+            tombo-space-size +' bleed-size +' old-page-w *' 0.5,
+            tombo-space-size +' bleed-size *' 2.0 +' old-page-h +' line-len
+          );
+      ]
+    in
+    let bottom-path-lst =
+      [
+        Gr.line
+          (
+            tombo-space-size +' bleed-size +' old-page-w *' 0.5 -' line-len,
+            tombo-space-size
+          )
+          (
+            tombo-space-size +' bleed-size +' old-page-w *' 0.5 +' line-len,
+            tombo-space-size
+          );
+        Gr.line
+          (
+            tombo-space-size +' bleed-size +' old-page-w *' 0.5,
+            tombo-space-size
+          )
+          (
+            tombo-space-size +' bleed-size +' old-page-w *' 0.5,
+            tombo-space-size -' line-len
+          );
+      ]
+    in
+    let left-path-lst =
+      [
+        Gr.line
+          (
+            tombo-space-size,
+            tombo-space-size +' bleed-size +' old-page-h *' 0.5 -' line-len
+          )
+          (
+            tombo-space-size,
+            tombo-space-size +' bleed-size +' old-page-h *' 0.5 +' line-len
+          );
+        Gr.line
+          (
+            tombo-space-size,
+            tombo-space-size +' bleed-size +' old-page-h *' 0.5
+          )
+          (
+            tombo-space-size -' line-len,
+            tombo-space-size +' bleed-size +' old-page-h *' 0.5
+          );
+      ]
+    in
+    let right-path-lst =
+      [
+        Gr.line
+          (
+            tombo-space-size +' bleed-size *' 2.0 +' old-page-w,
+            tombo-space-size +' bleed-size +' old-page-h *' 0.5 -' line-len
+          )
+          (
+            tombo-space-size +' bleed-size *' 2.0 +' old-page-w,
+            tombo-space-size +' bleed-size +' old-page-h *' 0.5 +' line-len
+          );
+        Gr.line
+          (
+            tombo-space-size +' bleed-size *' 2.0 +' old-page-w,
+            tombo-space-size +' bleed-size +' old-page-h *' 0.5
+          )
+          (
+            tombo-space-size +' bleed-size *' 2.0 +' old-page-w +' line-len,
+            tombo-space-size +' bleed-size +' old-page-h *' 0.5
+          );
+      ]
+    in
+    let to-gr-lst path-lst =
+      path-lst
+      |> List.map (stroke line-depth Color.black)
+    in
+  [
+    left-top-path-lst;
+    left-bottom-path-lst;
+    right-top-path-lst;
+    right-bottom-path-lst;
+    top-path-lst;
+    bottom-path-lst;
+    left-path-lst;
+    right-path-lst;
+  ]
+  |> List.concat
+  |> to-gr-lst
+
+
+
+  let tombo-page-break ?:bleed-size-opt-opt ?:tombo-space-size-opt-opt ctx page valuepagecontf valuepagepartsf bb =
+    let bleed-size =
+      match bleed-size-opt-opt with
+      | None -> default-bleed-size
+      | Some(None) -> 0pt
+      | Some(Some(len)) -> len
+    in
+    let tombo-space-size =
+      match tombo-space-size-opt-opt with
+      | None -> default-tombo-space-size
+      | Some(None) -> 0pt
+      | Some(Some(len)) -> len
+    in
+    let is-tombo =
+      match tombo-space-size-opt-opt with
+      | Some(None) -> false
+      | _ -> true
+    in
+    let space = bleed-size +' tombo-space-size in
+    % ----- ページサイズを新しく設定する
+    let (old-page-w, old-page-h) = get-page-size page in
+    let new-page-w = old-page-w +' (space *' 2.0) in
+    let new-page-h = old-page-h +' (space *' 2.0) in
+    let new-page-size = UserDefinedPaper(new-page-w, new-page-h) in
+    % ----- トンボのグラフィックを定義する
+    let tombo-gr-ib = inline-graphics 0pt 0pt 0pt
+      (fun _ -> make-tombo-gr-lst tombo-space-size bleed-size (old-page-w, old-page-h))
+    in
+    let tombo-gr-bb =
+      let ctx =
+        ctx
+        |> set-paragraph-margin 0pt 0pt
+      in
+      line-break true true ctx (tombo-gr-ib ++ inline-fil)
+    in
+    % ----- valuepagecontfを新しく設定しなおす（originの位置をずらす）
+    let new-valuepagecontf page-number =
+      let valuepagecont = valuepagecontf page-number in
+      let (old-text-origin-w, old-text-origin-h) = valuepagecont#text-origin in
+      let new-text-origin-w = old-text-origin-w +' space in
+      let new-text-origin-h = old-text-origin-h +' space in
+      let text-height = valuepagecont#text-height in
+      (| text-height = text-height; text-origin = (new-text-origin-w, new-text-origin-h) |)
+    in
+    % ----- valuepagepartsfを新しく設定しなおす(originの位置をずらす)
+    let new-valuepagepartsf page-number =
+      let valuepageparts = valuepagepartsf page-number in
+      let (old-header-origin-w, old-header-origin-h) = valuepageparts#header-origin in
+      let (old-footer-origin-w, old-footer-origin-h) = valuepageparts#footer-origin in
+      let new-header-origin =
+        (old-header-origin-w +' space, old-header-origin-h +' space)
+      in
+      let new-footer-origin =
+        (old-footer-origin-w +' space, old-footer-origin-h +' space)
+      in
+      let old-header-content = valuepageparts#header-content in
+      let new-header-content =
+        if is-tombo then
+          % ----- トンボを付けると指定されていた場合はトンボのbbをくっつける
+          old-header-content +++ tombo-gr-bb
+        else
+          % ----- トンボを付けたくない場合は何もしない
+          old-header-content
+      in
+      let old-footer-content = valuepageparts#footer-content in
+      (|header-content = new-header-content; header-origin = new-header-origin; footer-content = old-footer-content; footer-origin = new-footer-origin|)
+    in
+    page-break new-page-size new-valuepagecontf new-valuepagepartsf bb
+
+end

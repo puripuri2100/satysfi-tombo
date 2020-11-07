@@ -1,0 +1,180 @@
+@require: math
+@require: color
+@require: gr
+@require: tombo/tombo
+
+
+% フォント関係
+
+  % フォントサイズ補正
+  let font-ratio-latin = 1.
+  let font-ratio-cjk = 0.88
+
+
+
+  % (フォント名, フォントサイズ補正, ベースライン補正)
+  let font-latin-roman = (`Junicode`, font-ratio-latin, 0.)
+  let font-latin-bold = (`Junicode-b`, font-ratio-latin, 0.)
+  let font-latin-italic = (`Junicode-it`, font-ratio-latin, 0.)
+  let font-latin-sans = (`lmsans`, font-ratio-latin, 0.)
+  let font-latin-mono = (`lmmono`, font-ratio-latin, 0.)
+  let font-cjk-mincho = (`ipaexm`, font-ratio-cjk, 0.)
+  let font-cjk-gothic = (`ipaexg`, font-ratio-cjk, 0.)
+
+
+
+  % フォント変更用関数
+  let set-cjk-font font-name ctx =
+    ctx |> set-font HanIdeographic font-name
+        |> set-font Kana font-name
+
+
+  let set-latin-font font-name ctx =
+    ctx |> set-font Latin font-name
+
+let font-size-normal = 12pt
+
+% 基本となるctxの設定
+let ctx-get-initial-context l-width =
+  get-initial-context l-width (command \math)
+    |> set-font-size font-size-normal
+    |> set-dominant-wide-script Kana
+    |> set-language Kana Japanese
+    |> set-language HanIdeographic Japanese
+    |> set-cjk-font font-cjk-mincho
+    |> set-dominant-narrow-script Latin
+    |> set-language Latin English
+    |> set-latin-font font-latin-roman
+    |> set-hyphen-penalty 100
+    |> set-math-font `lmodern`
+    |> set-manual-rising 0pt % 文字の上下の補正値
+    |> set-text-color Color.black
+
+
+
+
+  % ページの余白設定
+  let page-width = 210mm
+  let page-height = 297mm
+  let top-space = 20mm
+  let bottom-space = 20mm
+  let left-space = (page-width -' ((font-size-normal *' font-ratio-cjk) *' 40.0)) *' 0.5
+  let right-space = (page-width -' ((font-size-normal *' font-ratio-cjk) *' 40.0)) *' 0.5
+  let text-width = page-width -' left-space -' right-space
+
+
+let document record bt =
+
+  % ctx設定
+  let ctx-doc = ctx-get-initial-context text-width in
+
+  let title-it = record#title in
+  let author-it = record#author in
+
+  let title-ib =
+    let ctx =
+      ctx-doc
+      |> set-font-size 20pt
+      |> set-cjk-font font-cjk-gothic
+      |> set-latin-font font-latin-sans
+    in
+    read-inline ctx title-it
+  in
+  let title-bb = line-break true true ctx-doc (inline-fil ++ title-ib ++ inline-fil) in
+
+
+  let author-ib =
+    let ctx =
+      ctx-doc
+      |> set-font-size 15pt
+      |> set-cjk-font font-cjk-gothic
+      |> set-latin-font font-latin-sans
+    in
+    read-inline ctx author-it
+  in
+  let author-bb = line-break true true ctx-doc (inline-fil ++ author-ib ++ inline-fil) in
+
+
+  let bb-main = read-block ctx-doc bt in
+
+  % ページサイズ（今回はA4）
+  let page = UserDefinedPaper(page-width, page-height) in
+
+  % コンテンツを表示させる部分の指定
+  let pagecontf pbinfo =
+    (|
+      text-height = page-height -' (top-space +' bottom-space);
+      text-origin = (left-space, top-space);
+    |)
+  in
+
+  % ヘッダーとフッター
+  let pagepartsf pbinfo =
+    let page-num = embed-string (arabic pbinfo#page-number) in
+    let ctx = set-paragraph-margin 0pt 0pt ctx-doc in
+    let header = block-nil in
+    let header-origin = (left-space, 30pt) in
+    let footer =
+      let footer-main = line-break true true ctx (inline-fil ++ (read-inline ctx {#page-num;}) ++ inline-fil)
+      in
+        block-skip (bottom-space *' 0.2) +++ footer-main
+    in
+    let footer-origin = (left-space, page-height -' bottom-space) in
+    (|
+      header-content = header;
+      header-origin = header-origin;
+      footer-content = footer;
+      footer-origin = footer-origin;
+    |)
+  in
+
+  let bb = title-bb +++ author-bb +++ bb-main in
+  % メイン
+  %let doc-main = Tombo.tombo-page-break ctx-doc page pagecontf pagepartsf bb-main in
+  let doc-main = Tombo.tombo-page-break ctx-doc page pagecontf pagepartsf bb in
+  %let doc-main = page-break page pagecontf pagepartsf bb-main in
+    doc-main
+
+
+let indent ctx = inline-skip ((get-font-size ctx) *' font-ratio-cjk)
+
+% 段落コマンド
+
+let-block ctx +p inner =
+  let ib-indent = indent ctx in
+  let ib-inner = read-inline ctx inner in
+    line-break true true ctx (ib-indent ++ ib-inner ++ inline-fil)
+
+
+let space = Tombo.default-bleed-size +' Tombo.default-tombo-space-size
+
+let-inline ctx \page-size =
+  let bleed-size = Tombo.default-bleed-size in
+  let tombo-space-size = Tombo.default-tombo-space-size in
+  let space = bleed-size +' tombo-space-size in
+  let path = Gr.rectangle (0pt, 0pt) (page-width, page-height) in
+  let gr =
+    path
+    |> fill (Gray(0.2))
+    |> shift-graphics (space, space)
+  in
+  inline-graphics 0pt 0pt 0pt (fun _ -> [gr])
+
+let-inline ctx \page-size-tatiotosi =
+  let bleed-size = Tombo.default-bleed-size in
+  let tombo-space-size = Tombo.default-tombo-space-size in
+  let space = bleed-size +' tombo-space-size in
+  let path =
+    Gr.rectangle
+      (tombo-space-size, tombo-space-size)
+      (page-width +' (space *' 2.0) -' tombo-space-size, page-height+' (space *' 2.0) -' tombo-space-size)
+  in
+  let gr =
+    path
+    |> fill Color.blue
+    %|> shift-graphics (Tombo.default-bleed-size, Tombo.default-bleed-size)
+  in
+  inline-graphics 0pt 0pt 0pt (fun _ -> [gr])
+
+
+let-block ctx +clear-page = clear-page
