@@ -16,6 +16,8 @@ module Tombo : sig
 
   val tombo-page-break : length option?-> length option?-> context -> page -> ((|page-number : int|) -> (| text-height: length; text-origin: point |)) -> ((|page-number : int|) -> (|header-content : block-boxes; header-origin: point; footer-content: block-boxes; footer-origin: point|)) -> block-boxes -> document
 
+  val tombo-page-break-two-column : length option?-> length option?-> context -> page -> length -> (unit -> block-boxes) -> ((|page-number : int|) -> (| text-height: length; text-origin: point |)) -> ((|page-number : int|) -> (|header-content : block-boxes; header-origin: point; footer-content: block-boxes; footer-origin: point|)) -> block-boxes -> document
+
 end = struct
 
   let default-bleed-size = 3mm
@@ -217,7 +219,7 @@ end = struct
   |> to-gr-lst
 
 
-
+% ----- page-breakについての実装
   let tombo-page-break ?:bleed-size-opt-opt ?:tombo-space-size-opt-opt ctx page valuepagecontf valuepagepartsf bb =
     let bleed-size =
       match bleed-size-opt-opt with
@@ -286,5 +288,80 @@ end = struct
       (|header-content = new-header-content; header-origin = new-header-origin; footer-content = old-footer-content; footer-origin = new-footer-origin|)
     in
     page-break new-page-size new-valuepagecontf new-valuepagepartsf bb
+
+
+
+
+% ----- page-break-two-columnについての実装
+  let tombo-page-break-two-column ?:bleed-size-opt-opt ?:tombo-space-size-opt-opt ctx page len f valuepagecontf valuepagepartsf bb =
+    let bleed-size =
+      match bleed-size-opt-opt with
+      | None -> default-bleed-size
+      | Some(None) -> 0pt
+      | Some(Some(len)) -> len
+    in
+    let tombo-space-size =
+      match tombo-space-size-opt-opt with
+      | None -> default-tombo-space-size
+      | Some(None) -> 0pt
+      | Some(Some(len)) -> len
+    in
+    let is-tombo =
+      match tombo-space-size-opt-opt with
+      | Some(None) -> false
+      | _ -> true
+    in
+    let space = bleed-size +' tombo-space-size in
+    % ----- ページサイズを新しく設定する
+    let (old-page-w, old-page-h) = get-page-size page in
+    let new-page-w = old-page-w +' (space *' 2.0) in
+    let new-page-h = old-page-h +' (space *' 2.0) in
+    let new-page-size = UserDefinedPaper(new-page-w, new-page-h) in
+    % ----- トンボのグラフィックを定義する
+    let tombo-gr-ib = inline-graphics 0pt 0pt 0pt
+      (fun _ -> make-tombo-gr-lst tombo-space-size bleed-size (old-page-w, old-page-h))
+    in
+    let tombo-gr-bb =
+      let ctx =
+        ctx
+        |> set-paragraph-margin 0pt 0pt
+      in
+      line-break true true ctx (tombo-gr-ib ++ inline-fil)
+    in
+    % ----- valuepagecontfを新しく設定しなおす（originの位置をずらす）
+    let new-valuepagecontf page-number =
+      let valuepagecont = valuepagecontf page-number in
+      let (old-text-origin-w, old-text-origin-h) = valuepagecont#text-origin in
+      let new-text-origin-w = old-text-origin-w +' space in
+      let new-text-origin-h = old-text-origin-h +' space in
+      let text-height = valuepagecont#text-height in
+      (| text-height = text-height; text-origin = (new-text-origin-w, new-text-origin-h) |)
+    in
+    % ----- valuepagepartsfを新しく設定しなおす(originの位置をずらす)
+    let new-valuepagepartsf page-number =
+      let valuepageparts = valuepagepartsf page-number in
+      let (old-header-origin-w, old-header-origin-h) = valuepageparts#header-origin in
+      let (old-footer-origin-w, old-footer-origin-h) = valuepageparts#footer-origin in
+      let new-header-origin =
+        (old-header-origin-w +' space, old-header-origin-h +' space)
+      in
+      let new-footer-origin =
+        (old-footer-origin-w +' space, old-footer-origin-h +' space)
+      in
+      let old-header-content = valuepageparts#header-content in
+      let new-header-content =
+        if is-tombo then
+          % ----- トンボを付けると指定されていた場合はトンボのbbをくっつける
+          old-header-content +++ tombo-gr-bb
+        else
+          % ----- トンボを付けたくない場合は何もしない
+          old-header-content
+      in
+      let old-footer-content = valuepageparts#footer-content in
+      (|header-content = new-header-content; header-origin = new-header-origin; footer-content = old-footer-content; footer-origin = new-footer-origin|)
+    in
+    page-break-two-column new-page-size len f new-valuepagecontf new-valuepagepartsf bb
+
+
 
 end

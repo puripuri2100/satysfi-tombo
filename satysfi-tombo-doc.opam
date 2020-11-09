@@ -1,6 +1,6 @@
 opam-version: "2.0"
 name: "satysfi-tombo-doc"
-version: "0.1.0"
+version: "0.2.0"
 synopsis: "Document of Tombo Package"
 description: """
 Document of Tombo Package.

@@ -3,13 +3,16 @@
 
 
 document (|
-  title = {tomboパッケージ v0.1.0};
+  title = {tomboパッケージ v0.2.0};
   author = {Naoki Kaneko};
 |) '<
   +p{このパッケージはトンボを付けるときに必要な関数を提供します。使用はクラスファイル内を想定しています。}
   +p{従来document型を作成するために使用していた\code(`page-break`);関数を\code(`Tombo.tombo-page-break`);に置き換え、第一引数にcontext型を与えるだけでトンボと裁ち落としを設定することが出来ます。例えば
   \d-code(`Tombo.tombo-page-break ctx-doc page pagecontf pagepartsf bb-main`);
   のようになります（各変数の名前は各クラスファイルによって変わるでしょう）。
+  二段組みをする場合も同様に
+  \d-code(`Tombo.tombo-page-break-two-column ctx-doc page len f pagecontf pagepartsf bb-main`);
+  となります。
   }
   +p{裁ち落としのサイズを変えたい場合は
   \d-code(`Tombo.tombo-page-break ?:(Some(5mm))`);のように、オプショナル引数の中にlength option型を与えます。この時、\code(`None`);を与えると裁ち落としが設定されなくなります。}

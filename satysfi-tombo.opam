@@ -1,6 +1,6 @@
 opam-version: "2.0"
 name: "satysfi-tombo"
-version: "0.1.0"
+version: "0.2.0"
 synopsis: "Generate Japanese-style crop marks"
 description: """
 Generate Japanese-style crop marks.
